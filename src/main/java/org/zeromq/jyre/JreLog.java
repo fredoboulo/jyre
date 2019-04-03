@@ -7,7 +7,7 @@ import org.zeromq.zproto.annotation.protocol.Protocol;
 @Protocol(signature = 0xAAA0 | 2)
 public class JreLog
 {
-    @Message
+    @Message(id = 1)
     public static class Log extends JreLog
     {
         @Field(length = 1)

@@ -482,7 +482,7 @@ public class JyreAgent
                 //  If peer has really vanished, expire it
                 pipe.sendMore("EXIT");
                 pipe.send(identity);
-                deletePeerFromGroups(peerGroups, peer);
+                deletePeerFromGroups(peer);
                 it.remove();
                 peer.destroy();
             }
@@ -506,9 +506,9 @@ public class JyreAgent
     }
 
     //  Remove peer from group, if it's a member
-    private static void deletePeerFromGroups(Map<String, ZreGroup> groups, ZrePeer peer)
+    private void deletePeerFromGroups(ZrePeer peer)
     {
-        for (ZreGroup group : groups.values()) {
+        for (ZreGroup group : peerGroups.values()) {
             group.leave(peer);
         }
     }

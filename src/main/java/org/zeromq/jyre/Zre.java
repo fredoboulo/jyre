@@ -14,7 +14,7 @@ public class Zre
     @Field(length = 2)
     int sequence;
 
-    @Message
+    @Message(id = 1)
     public static class Hello extends Zre
     {
         @Field
@@ -29,14 +29,14 @@ public class Zre
         public Map<String, String> headers;
     }
 
-    @Message
+    @Message(id = 2)
     public static class Whisper extends Zre
     {
         @Field
         public ZFrame content;
     }
 
-    @Message
+    @Message(id = 3)
     public static class Shout extends Zre
     {
         @Field
@@ -45,7 +45,7 @@ public class Zre
         public ZFrame content;
     }
 
-    @Message
+    @Message(id = 4)
     public static class Join extends Zre
     {
         @Field
@@ -54,7 +54,7 @@ public class Zre
         public int    status;
     }
 
-    @Message
+    @Message(id = 5)
     public static class Leave extends Zre
     {
         @Field
@@ -63,12 +63,12 @@ public class Zre
         public int    status;
     }
 
-    @Message
+    @Message(id = 6)
     public static class Ping extends Zre
     {
     }
 
-    @Message
+    @Message(id = 7)
     public static class PingOk extends Zre
     {
     }
