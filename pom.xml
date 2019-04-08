@@ -4,7 +4,7 @@
   <groupId>org.zeromq</groupId>
   <artifactId>zyre</artifactId>
   <packaging>jar</packaging>
-  <version>0.1.1-SNAPSHOT</version>
+  <version>0.1.2-SNAPSHOT</version>
   <name>zyre</name>
   <description>framework for proximity-based peer-to-peer applications</description>
   <url>http://zyre.org</url>
@@ -24,16 +24,16 @@
   </developers>
   <dependencies>
     <dependency>
-      <groupId>org.zeromq</groupId>
-      <artifactId>jeromq</artifactId>
-      <version>0.3.5</version>
+		<groupId>junit</groupId>
+		<artifactId>junit</artifactId>
+		<version>4.12</version>
+		<scope>test</scope>
     </dependency>
-    <dependency>
-      <groupId>junit</groupId>
-      <artifactId>junit</artifactId>
-      <version>4.12</version>
-      <scope>test</scope>
-    </dependency>
+	<dependency>
+		<groupId>org.zeromq</groupId>
+		<artifactId>zproto-annotation-processor</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+	</dependency>
   </dependencies>
   <build>
     <plugins>
@@ -49,7 +49,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-source-plugin</artifactId>
-        <version>2.2</version>
+        <version>3.0.1</version>
         <executions>
           <execution>
             <id>attach-sources</id>
@@ -62,7 +62,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-javadoc-plugin</artifactId>
-        <version>2.8.1</version>
         <executions>
           <execution>
             <id>attach-javadocs</id>
@@ -72,18 +71,199 @@
           </execution>
         </executions>
       </plugin>
+	<plugin>
+		<groupId>org.apache.maven.plugins</groupId>
+		<artifactId>maven-compiler-plugin</artifactId>
+		<version>3.5.1</version>
+		<configuration>
+			<source>1.8</source>
+			<target>1.8</target>
+		    <compilerArgument>-Xlint:unchecked</compilerArgument>
+			<annotationProcessorPaths>
+				<annotationProcessorPath>
+					<groupId>org.zeromq</groupId>
+					<artifactId>zproto-annotation-processor</artifactId>
+					<version>0.0.1-SNAPSHOT</version>
+				</annotationProcessorPath>
+				<annotationProcessorPath>
+					<groupId>com.squareup</groupId>
+					<artifactId>javapoet</artifactId>
+					<version>1.10.0</version>
+				</annotationProcessorPath>
+			</annotationProcessorPaths>
+		</configuration>
+	</plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.1.0</version>
         <configuration>
-          <!-- Native library path for linking with jzmq is pulled from an
-               OS-specific location, defined in profiles section below -->
-          <argLine>-Djava.library.path=${native.library.path}</argLine>
+          <archive>
+            <manifestFile>${project.build.outputDirectory}/META-INF/MANIFEST.MF</manifestFile>
+          </archive>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.felix</groupId>
+        <artifactId>maven-bundle-plugin</artifactId>
+        <version>3.5.0</version>
+        <extensions>true</extensions>
+        <configuration>
+          <instructions>
+            <Export-Package>*</Export-Package>
+          </instructions>
+        </configuration>
+        <executions>
+          <execution>
+            <id>bundle-manifest</id>
+            <phase>process-classes</phase>
+            <goals>
+              <goal>manifest</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+<!--       <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-checkstyle-plugin</artifactId>
+        <version>3.0.0</version>
+        <executions>
+          <execution>
+            <phase>validate</phase>
+            <goals>
+                <goal>check</goal>
+            </goals>
+            <configuration>
+                <consoleOutput>true</consoleOutput>
+                <includeTestSourceDirectory>true</includeTestSourceDirectory>
+                <configLocation>${project.basedir}/src/checkstyle/checks.xml</configLocation>
+                <failOnViolation>true</failOnViolation>
+                <excludes>**/guide/*</excludes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+ -->      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-release-plugin</artifactId>
+        <version>2.5.3</version>
+        <configuration>
+          <tagNameFormat>v@{project.version}</tagNameFormat>
         </configuration>
       </plugin>
     </plugins>
+    <pluginManagement>
+      <plugins>
+        <!--This plugin's configuration is used to store Eclipse m2e settings only. It has no influence on the Maven build itself.-->
+        <plugin>
+          <groupId>org.eclipse.m2e</groupId>
+          <artifactId>lifecycle-mapping</artifactId>
+          <version>1.0.0</version>
+          <configuration>
+            <lifecycleMappingMetadata>
+              <pluginExecutions>
+                <pluginExecution>
+                  <pluginExecutionFilter>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-checkstyle-plugin</artifactId>
+                    <versionRange>[2.11,)</versionRange>
+                    <goals>
+                      <goal>check</goal>
+                    </goals>
+                  </pluginExecutionFilter>
+                  <action>
+                    <ignore />
+                  </action>
+                </pluginExecution>
+              </pluginExecutions>
+            </lifecycleMappingMetadata>
+          </configuration>
+        </plugin>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-javadoc-plugin</artifactId>
+          <version>3.0.1</version>
+          <configuration>
+            <keywords>true</keywords>
+            <source>1.8</source>
+            <tags>
+              <tag>
+                <name>apiNote</name>
+                <placement>a</placement>
+                <head>API Note</head>
+              </tag>
+            </tags>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
   </build>
+    <reporting>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+          </plugin>
+        </plugins>
+    </reporting>
   <profiles>
+    <profile>
+      <id>coverage</id>
+        <activation>
+          <activeByDefault>false</activeByDefault>
+        </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.jacoco</groupId>
+            <artifactId>jacoco-maven-plugin</artifactId>
+            <version>0.7.9</version>
+            <executions>
+              <execution>
+                <id>default-prepare-agent</id>
+                <goals>
+                  <goal>prepare-agent</goal>
+                </goals>
+              </execution>
+              <execution>
+                <id>default-report</id>
+                <phase>prepare-package</phase>
+                <goals>
+                  <goal>report</goal>
+                </goals>
+              </execution>
+              <execution>
+                <id>default-check</id>
+                <goals>
+                  <goal>check</goal>
+                </goals>
+                <configuration>
+                  <rules>
+                    <!-- implementation is needed only for Maven 2 -->
+                    <rule implementation="org.jacoco.maven.RuleConfiguration">
+                      <element>BUNDLE</element>
+                      <limits>
+                        <!-- implementation is needed only for Maven 2 -->
+                        <limit implementation="org.jacoco.report.check.Limit">
+                          <counter>COMPLEXITY</counter>
+                          <value>COVEREDRATIO</value>
+                          <minimum>0.60</minimum>
+                        </limit>
+                      </limits>
+                    </rule>
+                  </rules>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        <plugin>
+          <groupId>org.eluder.coveralls</groupId>
+          <artifactId>coveralls-maven-plugin</artifactId>
+          <version>4.3.0</version>
+        </plugin>
+        </plugins>
+      </build>
+    </profile>
     <profile>
       <id>release-sign-artifacts</id>
       <activation>
@@ -97,7 +277,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-gpg-plugin</artifactId>
-            <version>1.1</version>
+            <version>1.6</version>
             <executions>
               <execution>
                 <id>sign-artifacts</id>
