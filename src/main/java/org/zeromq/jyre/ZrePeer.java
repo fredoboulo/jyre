@@ -31,7 +31,6 @@ import java.util.Map;
 import org.zeromq.SocketType;
 import org.zeromq.ZContext;
 import org.zeromq.ZMQ.Socket;
-import org.zeromq.jyre.ZreMsg;
 
 import zmq.util.Clock;
 
@@ -130,7 +129,7 @@ public class ZrePeer
             if (++sent_sequence > USHORT_MAX) {
                 sent_sequence = 0;
             }
-            msg.payload().sequence = sent_sequence;
+            msg.payload.sequence = sent_sequence;
             if (!msg.send(mailbox)) {
                 disconnect();
                 return false;
