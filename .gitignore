@@ -46,4 +46,4 @@ target
 .metadata
 .wtpmodules
 bin/
-.settings/*
+.settings/

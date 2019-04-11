@@ -23,6 +23,7 @@ import org.zeromq.zproto.annotation.actor.Actor;
 import org.zeromq.zproto.annotation.actor.Command;
 import org.zeromq.zproto.annotation.actor.Endpoint;
 import org.zeromq.zproto.annotation.actor.Message;
+import org.zeromq.zproto.annotation.actor.Receive;
 import org.zeromq.zproto.annotation.actor.Ticker;
 
 @Actor("Jyre")
@@ -95,7 +96,6 @@ public class JyreAgent
     private final Map<String, ZreGroup> peerGroups = new HashMap<>();   //  Groups that our peers are in
     private final Map<String, ZreGroup> ownGroups  = new HashMap<>();   //  Groups that we are in
     private final Map<String, String>   headers    = new HashMap<>();   //  Our header values
-    private final ZTicker               ticker;
     private final int                   evasiveAt;
     private final int                   expiredAt;
 
@@ -116,7 +116,6 @@ public class JyreAgent
         }
         host = udp.host();
         endpoint = String.format("%s:%d", host, port);
-        this.ticker = ticker;
         ticker.addTimer(pingInterval, (args) -> {
             sendBeacon();
             pingAllPeers(pipe);
@@ -317,6 +316,7 @@ public class JyreAgent
         headers.put(name, value);
     }
 
+    @Receive("inbox")
     void inbox(@Message Zre.Hello msg, ZFrame address, ZContext ctx, ZMQ.Socket pipe)
     {
         ZrePeer peer = findPeer(msg, address, ctx, pipe);
@@ -332,6 +332,7 @@ public class JyreAgent
         peer.setHeaders(msg.headers);
     }
 
+    @Receive("inbox")
     void inbox(@Message Zre.Whisper msg, ZFrame address, ZContext ctx, ZMQ.Socket pipe)
     {
         ZrePeer peer = findPeer(msg, address, ctx, pipe);
@@ -347,6 +348,7 @@ public class JyreAgent
         peer.refresh(evasiveAt, expiredAt);
     }
 
+    @Receive("inbox")
     void inbox(@Message Zre.Shout msg, ZFrame address, ZContext ctx, ZMQ.Socket pipe)
     {
         ZrePeer peer = findPeer(msg, address, ctx, pipe);
@@ -363,6 +365,7 @@ public class JyreAgent
         peer.refresh(evasiveAt, expiredAt);
     }
 
+    @Receive("inbox")
     void inbox(@Message Zre.Ping msg, ZFrame address, ZContext ctx, ZMQ.Socket pipe)
     {
         ZrePeer peer = findPeer(msg, address, ctx, pipe);
@@ -375,6 +378,7 @@ public class JyreAgent
         peer.refresh(evasiveAt, expiredAt);
     }
 
+    @Receive("inbox")
     void inbox(@Message Zre.Join msg, ZFrame address, ZContext ctx, ZMQ.Socket pipe)
     {
         ZrePeer peer = findPeer(msg, address, ctx, pipe);
@@ -387,6 +391,7 @@ public class JyreAgent
         peer.refresh(evasiveAt, expiredAt);
     }
 
+    @Receive("inbox")
     void inbox(@Message Zre.Leave msg, ZFrame address, ZContext ctx, ZMQ.Socket pipe)
     {
         ZrePeer peer = findPeer(msg, address, ctx, pipe);
