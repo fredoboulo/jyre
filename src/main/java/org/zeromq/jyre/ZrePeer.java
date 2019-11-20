@@ -37,23 +37,22 @@ import zmq.util.Clock;
 public class ZrePeer
 {
     //  Constants, to be configured/reviewed
-    public static final int PEER_EVASIVE = 5000;  //  Five seconds' silence is evasive
-    public static final int PEER_EXPIRED = 10000; //  Ten seconds' silence is expired
+    public static final int PEER_EVASIVE = 5000;   //  Five seconds' silence is evasive
+    private static final int PEER_EXPIRED = 10000; //  Ten seconds' silence is expired
 
-    private static final int USHORT_MAX = 0xffff;
-    private static final int UBYTE_MAX  = 0xff;
+    private static final short USHORT_MAX = (short) 0xffff;
 
     private final ZContext      ctx;           //  CZMQ context
     private Socket              mailbox;       //  Socket through to peer
     private final String        identity;      //  Identity string
     private String              endpoint;      //  Endpoint connected to
-    private long                evasive_at;    //  Peer is being evasive
-    private long                expired_at;    //  Peer has expired by now
+    private long                evasiveAt;     //  Peer is being evasive
+    private long                expiredAt;     //  Peer has expired by now
     private boolean             connected;     //  Peer will send messages
     private boolean             ready;         //  Peer has said Hello to us
-    private int                 status;        //  Our status counter
-    private int                 sent_sequence; //  Outgoing message sequence
-    private int                 want_sequence; //  Incoming message sequence
+    private byte                status;        //  Our status counter
+    private short               sentSequence;  //  Outgoing message sequence
+    private short               wantSequence;  //  Incoming message sequence
     private Map<String, String> headers;       //  Peer headers
 
     private ZrePeer(ZContext ctx, String identity)
@@ -63,13 +62,13 @@ public class ZrePeer
 
         ready = false;
         connected = false;
-        sent_sequence = 0;
-        want_sequence = 0;
+        sentSequence = 0;
+        wantSequence = 0;
     }
 
     //  ---------------------------------------------------------------------
     //  Construct new peer object
-    public static ZrePeer newPeer(String identity, Map<String, ZrePeer> container, ZContext ctx)
+    static ZrePeer newPeer(String identity, Map<String, ZrePeer> container, ZContext ctx)
     {
         ZrePeer peer = new ZrePeer(ctx, identity);
         container.put(identity, peer);
@@ -115,7 +114,7 @@ public class ZrePeer
     //  ---------------------------------------------------------------------
     //  Disconnect peer mailbox
     //  No more messages will be sent to peer until connected again
-    public void disconnect()
+    void disconnect()
     {
         ctx.destroySocket(mailbox);
         mailbox = null;
@@ -126,10 +125,7 @@ public class ZrePeer
     public boolean send(ZreMsg msg)
     {
         if (connected) {
-            if (++sent_sequence > USHORT_MAX) {
-                sent_sequence = 0;
-            }
-            msg.payload.sequence = sent_sequence;
+            msg.payload.sequence = ++sentSequence;
             if (!msg.send(mailbox)) {
                 disconnect();
                 return false;
@@ -144,7 +140,7 @@ public class ZrePeer
 
     //  ---------------------------------------------------------------------
     //  Return peer connection endpoint
-    public String endpoint()
+    String endpoint()
     {
         if (connected) {
             return endpoint;
@@ -157,55 +153,53 @@ public class ZrePeer
 
     //  ---------------------------------------------------------------------
     //  Register activity at peer
-    public void refresh(int peerEvasive, int peerExpired)
+    void refresh(int peerEvasive, int peerExpired)
     {
         long now = Clock.nowMS();
-        evasive_at = now + peerEvasive;
-        expired_at = now + peerExpired;
+        evasiveAt = now + peerEvasive;
+        expiredAt = now + peerExpired;
     }
 
     //  ---------------------------------------------------------------------
     //  Return peer future expired time
-    public long expiredAt()
+    long expiredAt()
     {
-        return expired_at;
+        return expiredAt;
     }
 
     //  ---------------------------------------------------------------------
     //  Return peer future evasive time
-    public long evasiveAt()
+    long evasiveAt()
     {
-        return evasive_at;
+        return evasiveAt;
     }
 
-    public void setReady(boolean ready)
+    void setReady(boolean ready)
     {
         this.ready = ready;
     }
 
-    public boolean ready()
+    boolean ready()
     {
         return ready;
     }
 
-    public void setStatus(int status)
+    public void setStatus(byte status)
     {
         this.status = status;
     }
 
-    public int status()
+    public byte status()
     {
         return status;
     }
 
-    public void incStatus()
+    void incStatus()
     {
-        if (++status > UBYTE_MAX) {
-            status = 0;
-        }
+        ++status;
     }
 
-    public String identity()
+    String identity()
     {
         return identity;
     }
@@ -219,22 +213,20 @@ public class ZrePeer
         return defaultValue;
     }
 
-    public void setHeaders(Map<String, String> headers)
+    void setHeaders(Map<String, String> headers)
     {
         this.headers = new HashMap<>(headers);
     }
 
-    public boolean checkMessage(Zre msg)
+    boolean checkMessage(Zre msg)
     {
-        int recd_sequence = msg.sequence;
-        if (++want_sequence > USHORT_MAX) {
-            want_sequence = 0;
-        }
+        int receivedSequence = msg.sequence;
+        ++wantSequence;
 
-        boolean valid = want_sequence == recd_sequence;
+        boolean valid = wantSequence == receivedSequence;
         if (!valid) {
-            if (--want_sequence < 0) {
-                want_sequence = USHORT_MAX;
+            if (--wantSequence < 0) {
+                wantSequence = USHORT_MAX;
             }
         }
         return valid;

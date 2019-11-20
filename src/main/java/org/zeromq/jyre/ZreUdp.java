@@ -50,7 +50,7 @@ public class ZreUdp
 
     //  -----------------------------------------------------------------
     //  Constructor
-    public ZreUdp (int port_nbr) 
+    ZreUdp (int port_nbr)
     {
         this.port_nbr = port_nbr;
         
@@ -91,20 +91,20 @@ public class ZreUdp
     {
         try {
             handle.close ();
-        } catch (IOException e) {
+        } catch (IOException ignored) {
         }
     }
     
     //  -----------------------------------------------------------------
     //  Returns UDP socket handle
-    public DatagramChannel handle ()
+    DatagramChannel handle ()
     {
         return handle;
     }
     
     //  -----------------------------------------------------------------
     //  Return our own IP address as printable string
-    public String host ()
+    String host ()
     {
         return host;
     }

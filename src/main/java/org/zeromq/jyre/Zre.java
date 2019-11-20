@@ -9,67 +9,67 @@ import org.zeromq.zproto.annotation.protocol.Message;
 import org.zeromq.zproto.annotation.protocol.Protocol;
 
 @Protocol(signature = 0xAAA0 | 1)
-public class Zre
+class Zre
 {
-    @Field(length = 2)
-    int sequence;
+    @Field
+    short sequence;
 
     @Message(id = 1)
-    public static class Hello extends Zre
+    static class Hello extends Zre
     {
         @Field
-        public String              ipaddress;
-        @Field(length = 2)
-        public int                 mailbox;
+        String              ipaddress;
         @Field
-        public List<String>        groups;
-        @Field(length = 1)
-        public int                 status;
+        short               mailbox;
         @Field
-        public Map<String, String> headers;
+        List<String>        groups;
+        @Field
+        byte                status;
+        @Field
+        Map<String, String> headers;
     }
 
     @Message(id = 2)
-    public static class Whisper extends Zre
+    static class Whisper extends Zre
     {
         @Field
-        public ZFrame content;
+        ZFrame content;
     }
 
     @Message(id = 3)
-    public static class Shout extends Zre
+    static class Shout extends Zre
     {
         @Field
-        public String group;
+        String group;
         @Field
-        public ZFrame content;
+        ZFrame content;
     }
 
     @Message(id = 4)
-    public static class Join extends Zre
+    static class Join extends Zre
     {
         @Field
-        public String group;
-        @Field(length = 1)
-        public int    status;
+        String group;
+        @Field
+        byte   status;
     }
 
     @Message(id = 5)
-    public static class Leave extends Zre
+    static class Leave extends Zre
     {
         @Field
-        public String group;
-        @Field(length = 1)
-        public int    status;
+        String group;
+        @Field
+        byte   status;
     }
 
     @Message(id = 6)
-    public static class Ping extends Zre
+    static class Ping extends Zre
     {
     }
 
     @Message(id = 7)
-    public static class PingOk extends Zre
+    static class PingOk extends Zre
     {
     }
 }

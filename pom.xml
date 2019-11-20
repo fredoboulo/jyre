@@ -31,8 +31,8 @@
     </dependency>
 	<dependency>
 		<groupId>org.zeromq</groupId>
-		<artifactId>zproto-annotation-processor</artifactId>
-		<version>0.0.1-SNAPSHOT</version>
+		<artifactId>zproto-annotation</artifactId>
+		<version>0.0.4-SNAPSHOT</version>
 	</dependency>
   </dependencies>
   <build>
@@ -83,12 +83,7 @@
 				<annotationProcessorPath>
 					<groupId>org.zeromq</groupId>
 					<artifactId>zproto-annotation-processor</artifactId>
-					<version>0.0.1-SNAPSHOT</version>
-				</annotationProcessorPath>
-				<annotationProcessorPath>
-					<groupId>com.squareup</groupId>
-					<artifactId>javapoet</artifactId>
-					<version>1.10.0</version>
+					<version>0.0.4-SNAPSHOT</version>
 				</annotationProcessorPath>
 			</annotationProcessorPaths>
 		</configuration>

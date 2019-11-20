@@ -28,13 +28,11 @@ package org.zeromq.jyre;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.zeromq.jyre.ZreMsg;
-
 public class ZreGroup
 {
     @SuppressWarnings("unused")
-    private final String               name;
-    private final Map<String, ZrePeer> peers;
+    final String                        name;
+    private final Map<String, ZrePeer>  peers;
 
     private ZreGroup(String name)
     {
@@ -50,7 +48,7 @@ public class ZreGroup
 
     //  ---------------------------------------------------------------------
     //  Construct new group object
-    public static ZreGroup newGroup(String name, Map<String, ZreGroup> container)
+    static ZreGroup newGroup(String name, Map<String, ZreGroup> container)
     {
         ZreGroup group = new ZreGroup(name);
         container.put(name, group);

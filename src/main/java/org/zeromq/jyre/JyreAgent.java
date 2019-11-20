@@ -29,8 +29,7 @@ import org.zeromq.zproto.annotation.actor.Ticker;
 @Actor("Jyre")
 public class JyreAgent
 {
-    public static final int PING_PORT_NUMBER = 9991;
-    public static final int UBYTE_MAX        = 0xff;
+    private static final int PING_PORT_NUMBER = 9991;
     public static final int PING_INTERVAL    = 1000; //  Once per second
 
     //  =====================================================================
@@ -45,34 +44,31 @@ public class JyreAgent
 
     protected static class Beacon
     {
-        public static final int BEACON_SIZE = 22;
+        static final int BEACON_SIZE = 22;
 
-        public static final String BEACON_PROTOCOL = "ZRE";
-        public static final byte   BEACON_VERSION  = 0x01;
+        static final String BEACON_PROTOCOL = "ZRE";
+        static final byte   BEACON_VERSION  = 0x01;
 
         private final byte[] protocol = BEACON_PROTOCOL.getBytes();
         private final byte   version  = BEACON_VERSION;
         private final UUID   uuid;
-        private int          port;
+        private short        port;
 
-        public Beacon(ByteBuffer buffer)
+        Beacon(ByteBuffer buffer)
         {
             long msb = buffer.getLong();
             long lsb = buffer.getLong();
             uuid = new UUID(msb, lsb);
-            port = buffer.getShort();
-            if (port < 0) {
-                port = (0xffff) & port;
-            }
+            port = (short) (0xffff & buffer.getShort());
         }
 
-        public Beacon(UUID uuid, int port)
+        Beacon(UUID uuid, short port)
         {
             this.uuid = uuid;
             this.port = port;
         }
 
-        public ByteBuffer getBuffer()
+        ByteBuffer getBuffer()
         {
             ByteBuffer buffer = ByteBuffer.allocate(BEACON_SIZE);
             buffer.put(protocol);
@@ -87,11 +83,11 @@ public class JyreAgent
 
     private final ZreUdp                udp;
     private final String                host;                           //  Our host IP address
-    private final int                   port;                           //  Our inbox port number
+    private final short                 port;                           //  Our inbox port number
     private final UUID                  uuid       = UUID.randomUUID(); //  Our UUID as hex string
     private final String                identity   = uuidStr(uuid);     //  Our UUID as hex string
     private final String                endpoint;                       //  ipaddress:port endpoint
-    private int                         status;                         //  Our own change counter
+    private byte                        status;                         //  Our own change counter
     private final Map<String, ZrePeer>  peers      = new HashMap<>();   //  Hash of known peers, fast lookup
     private final Map<String, ZreGroup> peerGroups = new HashMap<>();   //  Groups that our peers are in
     private final Map<String, ZreGroup> ownGroups  = new HashMap<>();   //  Groups that we are in
@@ -108,12 +104,13 @@ public class JyreAgent
         this.expiredAt = expiredAt;
         Thread.currentThread().setName(name);
         udp = new ZreUdp(PING_PORT_NUMBER);
-        port = inbox.bindToRandomPort("tcp://*", 0xc000, 0xffff);
+        int port = inbox.bindToRandomPort("tcp://*", 0xc000, 0xffff);
         if (port < 0) {
             //  Interrupted
             udp.destroy();
             throw new IllegalStateException("Failed to bind a random port");
         }
+        this.port = (short) port;
         host = udp.host();
         endpoint = String.format("%s:%d", host, port);
         ticker.addTimer(pingInterval, (args) -> {
@@ -159,12 +156,9 @@ public class JyreAgent
         udp.destroy();
     }
 
-    private int incStatus()
+    private byte incStatus()
     {
-        if (++status > UBYTE_MAX) {
-            status = 0;
-        }
-        return status;
+        return ++status;
     }
 
     //  Delete peer for a given endpoint
@@ -179,12 +173,12 @@ public class JyreAgent
     }
 
     //  Find or create peer via its UUID string
-    private ZrePeer requirePeer(ZContext ctx, String identity, String address, int port, ZMQ.Socket pipe)
+    private ZrePeer requirePeer(ZContext ctx, String identity, String address, short port, ZMQ.Socket pipe)
     {
         ZrePeer peer = peers.get(identity);
         if (peer == null) {
             //  Purge any previous peer on same endpoint
-            String endpoint = String.format("%s:%d", address, port);
+            String endpoint = String.format("%s:%d", address, port & 0xffff);
 
             purgePeer(this.endpoint);
 
@@ -246,7 +240,7 @@ public class JyreAgent
     }
 
     @Command
-    public void whisper(ZMsg request)
+    void whisper(ZMsg request)
     {
         String identity = request.popString();
         ZrePeer peer = peers.get(identity);
@@ -262,7 +256,7 @@ public class JyreAgent
     }
 
     @Command
-    public void shout(ZContext ctx, ZMsg request)
+    void shout(ZMsg request)
     {
         //  Get group to send message to
         String name = request.popString();
@@ -277,7 +271,7 @@ public class JyreAgent
     }
 
     @Command
-    void join(String name, ZMQ.Socket pipe)
+    void join(String name)
     {
         ZreGroup group = ownGroups.get(name);
         if (group == null) {
@@ -285,7 +279,7 @@ public class JyreAgent
             group = ZreGroup.newGroup(name, ownGroups);
             ZreMsg msg = ZreMsg.newJoin(null);
             Zre.Join payload = msg.join();
-            payload.group = name;
+            payload.group = group.name;
             //  Update status before sending command
             payload.status = incStatus();
 
@@ -295,7 +289,7 @@ public class JyreAgent
     }
 
     @Command
-    void leave(String name, ZMQ.Socket pipe)
+    void leave(String name)
     {
         ZreGroup group = ownGroups.get(name);
         if (group != null) {
@@ -311,7 +305,7 @@ public class JyreAgent
     }
 
     @Command
-    public void setHeader(String name, String value)
+    void setHeader(String name, String value)
     {
         headers.put(name, value);
     }
@@ -404,7 +398,7 @@ public class JyreAgent
         peer.refresh(evasiveAt, expiredAt);
     }
 
-    ZrePeer findPeer(Zre msg, ZFrame address, ZContext ctx, ZMQ.Socket pipe)
+    private ZrePeer findPeer(Zre msg, ZFrame address, ZContext ctx, ZMQ.Socket pipe)
     {
         String identity = new String(address.getData());
 
@@ -430,7 +424,7 @@ public class JyreAgent
     }
 
     //  Handle beacon
-    protected boolean recvUdpBeacon(ZContext ctx, Socket pipe)
+    private boolean recvUdpBeacon(ZContext ctx, Socket pipe)
     {
         ByteBuffer buffer = ByteBuffer.allocate(Beacon.BEACON_SIZE);
 
@@ -462,7 +456,7 @@ public class JyreAgent
     }
 
     //  Send moar beacon
-    public void sendBeacon()
+    private void sendBeacon()
     {
         Beacon beacon = new Beacon(uuid, port);
         try {
@@ -476,7 +470,7 @@ public class JyreAgent
     //  We do this once a second:
     //  - if peer has gone quiet, send TCP ping
     //  - if peer has disappeared, expire it
-    public void pingAllPeers(ZMQ.Socket pipe)
+    private void pingAllPeers(ZMQ.Socket pipe)
     {
         Iterator<Map.Entry<String, ZrePeer>> it = peers.entrySet().iterator();
         while (it.hasNext()) {
