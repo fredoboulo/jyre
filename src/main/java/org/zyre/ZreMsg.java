@@ -918,13 +918,13 @@ public class ZreMsg
         String string = String.format (format, args);
         //  Attach string to list
         if (groups == null)
-            groups = new ArrayList <String> ();
+            groups = new ArrayList <> ();
         groups.add (string);
     }
 
     public void setGroups (Collection <String> value)
     {
-        groups = new ArrayList (value); 
+        groups = new ArrayList<> (value);
     }
 
 

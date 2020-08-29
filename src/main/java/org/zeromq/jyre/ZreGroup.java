@@ -27,8 +27,9 @@ package org.zeromq.jyre;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
-public class ZreGroup
+class ZreGroup
 {
     @SuppressWarnings("unused")
     final String                        name;
@@ -84,4 +85,8 @@ public class ZreGroup
         msg.destroy();
     }
 
+    Set<String> peers()
+    {
+        return peers.keySet();
+    }
 }

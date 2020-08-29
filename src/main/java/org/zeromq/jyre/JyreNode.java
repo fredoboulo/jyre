@@ -4,12 +4,18 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectableChannel;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.zeromq.SocketType;
+import org.zeromq.ZBeacon;
+import org.zeromq.ZCert;
 import org.zeromq.ZContext;
 import org.zeromq.ZFrame;
 import org.zeromq.ZMQ;
@@ -19,16 +25,20 @@ import org.zeromq.ZPoller;
 import org.zeromq.ZPoller.EventsHandler;
 import org.zeromq.jyre.Zre.Hello;
 import org.zeromq.timer.ZTicker;
+import org.zeromq.zgossip.ZGossip;
 import org.zeromq.zproto.annotation.actor.Actor;
 import org.zeromq.zproto.annotation.actor.Command;
 import org.zeromq.zproto.annotation.actor.Endpoint;
 import org.zeromq.zproto.annotation.actor.Message;
+import org.zeromq.zproto.annotation.actor.Pipe;
 import org.zeromq.zproto.annotation.actor.Receive;
 import org.zeromq.zproto.annotation.actor.Ticker;
 
-@Actor("Jyre")
-public class JyreAgent
+@Actor("JyreAgentActor")
+public class JyreNode
 {
+    private static final Logger log = LoggerFactory.getLogger(JyreNode.class);
+
     private static final int PING_PORT_NUMBER = 9991;
     public static final int PING_INTERVAL    = 1000; //  Once per second
 
@@ -86,7 +96,7 @@ public class JyreAgent
     private final short                 port;                           //  Our inbox port number
     private final UUID                  uuid       = UUID.randomUUID(); //  Our UUID as hex string
     private final String                identity   = uuidStr(uuid);     //  Our UUID as hex string
-    private final String                endpoint;                       //  ipaddress:port endpoint
+    private String                      endpoint;                       //  ipaddress:port endpoint
     private byte                        status;                         //  Our own change counter
     private final Map<String, ZrePeer>  peers      = new HashMap<>();   //  Hash of known peers, fast lookup
     private final Map<String, ZreGroup> peerGroups = new HashMap<>();   //  Groups that our peers are in
@@ -95,10 +105,36 @@ public class JyreAgent
     private final int                   evasiveAt;
     private final int                   expiredAt;
 
-    JyreAgent(String name, @Endpoint(type = SocketType.ROUTER) ZMQ.Socket inbox, 
-              @Ticker ZTicker ticker,
-              ZContext ctx, ZMQ.Socket pipe,
-            ZPoller poller, int pingInterval, int evasiveAt, int expiredAt)
+    private ZMQ.Socket pipe;
+    private ZMQ.Socket outbox;
+
+    private boolean terminated;
+    private boolean verbose;
+
+    private int beaconPort = 5670;
+    private String ephemeralPort;
+    private byte beaconVersion = 0x01;
+    private ZBeacon beacon;
+
+    private long evasiveTimeout = 5000;
+    private long expiredTimeout = 30_000;
+    private long interval = 0;
+//    private UUID uuid;
+    private String name = uuid.toString().substring(0, 6);
+    private String advertisedEndpoint;
+//    private int port;
+//    private byte status;
+    private ZGossip gossip;
+    private String gossipBind;
+    private String gossipConnect;
+    private String publicKey;
+    private String secretKey;
+    private String zapDomain = "global";
+
+    JyreNode(String name, @Endpoint(type = SocketType.ROUTER) ZMQ.Socket inbox,
+             @Ticker ZTicker ticker,
+             ZContext ctx, ZMQ.Socket pipe,
+             ZPoller poller, int pingInterval, int evasiveAt, int expiredAt)
     {
         this.evasiveAt = evasiveAt;
         this.expiredAt = expiredAt;
@@ -156,6 +192,71 @@ public class JyreAgent
         udp.destroy();
     }
 
+    private void gossipStart(ZContext ctx)
+    {
+        if (gossip == null) {
+            beaconPort = 0;
+            gossip = new ZGossip(ctx, name, null);
+            gossip.verbose(verbose);
+        }
+    }
+
+    private void nodeStart(ZContext ctx, ZPoller poller, ZMQ.Socket inbox)
+    {
+        if (secretKey != null) {
+            if (verbose) {
+                log.debug("applying cert to inbox {}", inbox);
+            }
+            ZCert cert = new ZCert(); // TODO cert with public and private keys
+            cert.apply(inbox);
+            inbox.setCurveServer(true);
+            inbox.setZAPDomain(zapDomain);
+        }
+        if (beaconPort > 0) {
+            //  Start beacon discovery
+            if (secretKey != null) {
+                // upgrade the beacon version
+                if (verbose) {
+                    log.debug("switching to beacon v3");
+                }
+                beaconVersion = 0x3;
+            }
+            // TODO instantiate beacon
+        }
+        else {
+            //  Start gossip discovery
+            gossip = new ZGossip(ctx, name, null); // TODO cert
+            //  If application didn't set an endpoint explicitly, grab ephemeral
+            //  port on all available network interfaces.
+            if (endpoint == null) {
+                gossip.bind("tcp://*:*");
+                endpoint = gossip.lastEndpoint();
+            } else {
+                gossip.bind(endpoint); // TODO check result of bind
+            }
+            String publishedEndpoint = endpoint;
+            if (advertisedEndpoint != null) {
+                // if the advertised endpoint is set and different than our bound endpoint
+                publishedEndpoint = advertisedEndpoint;
+            }
+            // further arrange if we have a public key associated
+            if (publicKey != null) {
+                publishedEndpoint = publishedEndpoint + "|" + publicKey;
+            }
+            gossip.publish(uuid(), publishedEndpoint);
+            //  Start polling on zgossip
+            poller.register(gossip.agent().pipe(), ZPoller.IN);
+        }
+    }
+
+    //  Stop node discovery and interconnection
+    //  TODO: clear peer tables; test stop/start cycles; how will this work
+    //  with gossip network? Do we leave that running in the meantime?
+    private void nodeStop()
+    {
+
+    }
+
     private byte incStatus()
     {
         return ++status;
@@ -188,8 +289,8 @@ public class JyreAgent
             //  Handshake discovery by sending HELLO as first message
             ZreMsg msg = ZreMsg.newHello(null);
             Zre.Hello hello = msg.hello();
-            hello.ipaddress = this.udp.host();
-            hello.mailbox = this.port;
+//            hello.ipaddress = this.udp.host();
+//            hello.mailbox = this.port;
             hello.groups = new ArrayList<>(ownGroups.keySet());
             hello.status = status;
             hello.headers = new HashMap<>(headers);
@@ -240,10 +341,115 @@ public class JyreAgent
     }
 
     @Command
-    void whisper(ZMsg request)
+    String uuid()
     {
-        String identity = request.popString();
-        ZrePeer peer = peers.get(identity);
+        return uuid.toString().replaceAll("-", "");
+    }
+
+    @Command
+    String name()
+    {
+        return name;
+    }
+
+    @Command
+    void setName(String name)
+    {
+        this.name = name;
+    }
+
+    @Command
+    void setVerbose(boolean verbose)
+    {
+        this.verbose = verbose;
+    }
+
+    @Command(control = true)
+    boolean terminate()
+    {
+        return false;
+    }
+
+    @Command
+    void setPort(int port)
+    {
+        beaconPort = port;
+    }
+
+    @Command
+    void setBeaconPeerPort(String port)
+    {
+        ephemeralPort = port;
+    }
+
+    @Command
+    void setEvasiveTimeout(long interval)
+    {
+        evasiveTimeout = interval;
+    }
+
+    @Command
+    void setSilentTimeout(long interval)
+    {
+        evasiveTimeout = interval;
+    }
+
+    @Command
+    void setExpiredTimeout(long interval)
+    {
+        expiredTimeout = interval;
+    }
+
+    @Command
+    void setInterval(long interval)
+    {
+        this.interval = interval;
+    }
+
+    @Command
+    void setInterface(String value)
+    {
+        // TODO
+    }
+
+    @Command
+    boolean setEndpoint(String value)
+    {
+        // TODO
+        return false;
+    }
+
+    @Command
+    void setContestInGroup(String value)
+    {
+        // TODO
+    }
+
+    @Command
+    boolean start(ZContext ctx, ZPoller poller, ZMQ.Socket inbox)
+    {
+        nodeStart(ctx, poller, inbox);
+        // TODO
+        return true;
+    }
+
+    @Command
+    void stop()
+    {
+        nodeStop();
+    }
+
+    @Command
+    ZMsg recv()
+    {
+        // TODO
+        return null;
+    }
+
+    @Command
+    void whisper(String id, ZMsg request)
+    {
+        ZrePeer peer = peers.get(id);
 
         //  Send frame on out to peer's mailbox, drop message
         //  if peer doesn't exist (may have been destroyed)
@@ -256,10 +462,9 @@ public class JyreAgent
     }
 
     @Command
-    void shout(ZMsg request)
+    void shout(String name, ZMsg request)
     {
         //  Get group to send message to
-        String name = request.popString();
         ZreGroup group = peerGroups.get(name);
         if (group != null) {
             ZreMsg msg = ZreMsg.newShout(null);
@@ -308,6 +513,64 @@ public class JyreAgent
     void setHeader(String name, String value)
     {
         headers.put(name, value);
+    }
+
+    @Command
+    List<String> peers()
+    {
+        return new ArrayList<>(peers.keySet());
+    }
+
+    @Command
+    List<String> peersByGroup(String name)
+    {
+        ZreGroup group = peerGroups.get(name);
+        if (group == null) {
+            return Collections.emptyList();
+        }
+        return new ArrayList<>(group.peers());
+    }
+
+    @Command
+    String peerEndpoint(String id)
+    {
+        ZrePeer peer = peers.get(id);
+        if (peer != null) {
+            return peer.endpoint();
+        }
+        return "";
+    }
+
+    @Command
+    String peerName(String id)
+    {
+        ZrePeer peer = peers.get(id);
+        if (peer != null) {
+            return peer.name();
+        }
+        return "";
+    }
+
+    @Command
+    String peerHeader(String id, String header)
+    {
+        ZrePeer peer = peers.get(id);
+        if (peer != null) {
+            return peer.header(header, "");
+        }
+        return "";
+    }
+
+    @Command
+    List<String> ownGroups()
+    {
+        return new ArrayList<>(ownGroups.keySet());
+    }
+
+    @Command
+    List<String> peerGroups()
+    {
+        return new ArrayList<>(peerGroups.keySet());
     }
 
     @Receive("inbox")
@@ -407,7 +670,7 @@ public class JyreAgent
         ZrePeer peer = peers.get(identity);
         if (msg instanceof Zre.Hello) {
             Zre.Hello hello = (Hello) msg;
-            peer = requirePeer(ctx, identity, hello.ipaddress, hello.mailbox, pipe);
+//            peer = requirePeer(ctx, identity, hello.ipaddress, hello.mailbox, pipe);
             assert (peer != null);
             peer.setReady(true);
         }
